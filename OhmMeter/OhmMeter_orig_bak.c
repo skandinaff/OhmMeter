@@ -8,7 +8,6 @@
 #define F_CPU 16000000
 
 #include <avr/io.h>
-#include <avr/sleep.h>
 #include <avr/interrupt.h>
 #include <util/delay.h>
 
@@ -28,6 +27,8 @@
 #define LED_GREEN PG2
 #define LED_RED PG0
 
+
+
 #define RANGE_Pin1 PL2
 #define RANGE_Pin2 PL3
 #define RANGE_Pin3 PL4
@@ -40,10 +41,6 @@
 #define VIN 5.0
 #define R_REFERENCE 474.0
 
-#define SLEEP_DELAY 60
-
-typedef unsigned char byte;
-
 char seg_buf[3];
 	
 char tab_seg[10] = {0x3F, 0x06, 0x5B, 0x4F, 0x66,
@@ -51,20 +48,6 @@ char tab_seg[10] = {0x3F, 0x06, 0x5B, 0x4F, 0x66,
 
 volatile char digit;
 volatile int limit;
-
-volatile unsigned char ElapsedSeconds = 0;
-
-void printbuf(int value);
-void sleep();
-void init_ADC();
-uint16_t read_ADC();
-void init_timer0();
-float calc_resist(uint16_t raw);
-void init_7Seg();
-void test_limits(int R);
-void range_select();
-void init_led();
-void init_sleep_timer();
 
  ISR(TIMER0_COMPA_vect)
  {
@@ -90,28 +73,6 @@ void init_sleep_timer();
  	SegDataPORT = seg_buf[digit]; // Lit current digit
 
  }
- 
- void sleep()
- {
-	 if(read_ADC() <= 1)
-	 {
-		 if(TIFR1 & (1<<OCF1A)){
-			 TIFR1 = (1<<OCF1A);
-			 ElapsedSeconds++;
-			 if(ElapsedSeconds == SLEEP_DELAY){
-				 ElapsedSeconds = 0 ;
-				 printbuf(888);
-				 LedPORT |= (1<<LED_GREEN);
-				 LedPORT |= (1<<LED_RED);
-				 _delay_ms(500);
-				 SegComPORT = 0x00;
-				 SegDataPORT = 0x00;
-				 LedPORT = 0x00;
-				 sleep_mode();
-			 }
-		 }
-	 }
- }
 
  void init_timer0()
  {
@@ -128,7 +89,7 @@ void init_sleep_timer();
 
 void init_ADC()
 {
-	ADMUX |= (1<<REFS0)|(1<<MUX0)|(1<<MUX1); 
+	ADMUX |= (1<<REFS0); 
 	ADCSRA |= (1<<ADEN); // Enable ADC
 	ADCSRA |= (1<<ADPS2)|(1<<ADPS1)|(1<<ADPS0); // Prescaler of 128
 	// If F_CPU = 1M => prescaler = 8
@@ -224,17 +185,8 @@ void init_led()
 	LedPORT &= ~(1<<LED_RED)|(1<<LED_GREEN);
 }
 
-void init_sleep_timer()
-{
-	TCCR1B |= (1<<CS12);
-	TCCR1B |= (1<<WGM12);
-	OCR1A = 62500; // Obtaining 1Hz clock
-}
-
 int main(void)
 {
-	set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-	
 	range_select();
 
 	init_timer0();
@@ -242,18 +194,13 @@ int main(void)
 	init_7Seg();
 	init_led();
 	
-	init_sleep_timer();
-	
-	
 	while(1)
 	{
 		int r = 0;
 		if(read_ADC()) r = calc_resist(read_ADC());
-			
-		sleep();
-			
+		
 		test_limits(r);
-				
+		
 		printbuf(r);
         _delay_ms(150);
 
